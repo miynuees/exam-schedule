@@ -270,7 +270,8 @@
     <div id="examTableArea"></div>
     <div style="margin-top:8px; font-size:12px; color:var(--muted);">
       💡 입실 시간은 시작 시간보다 자동으로 10분 전으로 계산됩니다.<br>
-      💡 "공통" 칸을 클릭하면 공통/선택을 토글할 수 있어요. 공통은 모든 학생, 선택은 해당 과목 신청자만 응시.
+      💡 "공통" 칸을 클릭하면 공통/선택을 토글할 수 있어요. 공통은 모든 학생, 선택은 해당 과목 신청자만 응시.<br>
+      💡 <strong>응시 인원이 0명이면</strong> 과목명이 엑셀의 컬럼명과 정확히 일치하지 않는 거예요. 과목명 확인!
     </div>
   </div>
 
@@ -340,12 +341,27 @@ function diffMinutes(start, end) {
 }
 
 /* ============== 시험 시간표 편집 UI ============== */
+function countTakers(p) {
+  if (students.length === 0) return null;
+  if (p.common) return students.length;
+  const target = normalize(p.subject);
+  return students.filter(s => s.subjects.some(([sub]) => normalize(sub) === target)).length;
+}
 function renderExamTable() {
   const area = document.getElementById('examTableArea');
-  let html = '<table class="exam-table"><thead><tr><th>날짜</th><th>교시</th><th>시작</th><th>종료</th><th>시간(분)</th><th>과목명</th><th>구분</th><th></th></tr></thead><tbody>';
+  let html = '<table class="exam-table"><thead><tr><th>날짜</th><th>교시</th><th>시작</th><th>종료</th><th>시간(분)</th><th>과목명</th><th>구분</th><th>응시 인원</th><th></th></tr></thead><tbody>';
   schedule.forEach((day, di) => {
     day.periods.forEach((p, pi) => {
       const cls = p.common ? 'row-common' : 'row-elect';
+      const takers = countTakers(p);
+      let takersHtml = '–';
+      if (takers !== null) {
+        if (takers === 0 && !p.common) {
+          takersHtml = `<span style="color:#d4351c;font-weight:700;">0명 ⚠️</span>`;
+        } else {
+          takersHtml = `<span style="font-weight:600;">${takers}명</span>`;
+        }
+      }
       html += `<tr class="${cls}">`;
       if (pi === 0) {
         html += `<td rowspan="${day.periods.length}" style="background:#f7f7f9;font-weight:600;"><input type="text" value="${day.date}" data-d="${di}" data-f="date" style="font-weight:600;"></td>`;
@@ -356,6 +372,7 @@ function renderExamTable() {
       html += `<td>${p.minutes}분</td>`;
       html += `<td><input type="text" value="${p.subject}" data-d="${di}" data-p="${pi}" data-f="subject" style="font-weight:600;"></td>`;
       html += `<td class="common-toggle" data-d="${di}" data-p="${pi}">${p.common ? '공통' : '선택'}</td>`;
+      html += `<td>${takersHtml}</td>`;
       html += `<td><button class="ghost" data-action="del" data-d="${di}" data-p="${pi}" style="font-size:11px; padding:4px 8px;">삭제</button></td>`;
       html += `</tr>`;
     });
@@ -460,17 +477,20 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r) continue;
-      // 학년 컬럼이 있으면 2학년만 필터, 없으면 전부
-      if (col.grade !== -1 && r[col.grade] !== 2 && r[col.grade] !== '2') continue;
       const cls = r[col.cls], num = r[col.num], name = r[col.name];
       if (!cls || !num || !name) continue;
+      // 학년: 컬럼이 있으면 그대로, 없으면 빈값
+      let grade = col.grade !== -1 ? r[col.grade] : null;
+      if (grade != null) grade = +grade;
       const subjects = [];
       for (const [colIdx, subjName] of Object.entries(subjectCols)) {
         const val = r[colIdx];
         if (val) subjects.push([subjName, String(val).trim()]);
       }
-      const newId = `2${String(cls).padStart(2,'0')}${String(num).padStart(2,'0')}`;
+      // 신학번 = 학년(없으면 ?) + 반(2자리) + 번호(2자리)
+      const newId = `${grade ?? '?'}${String(cls).padStart(2,'0')}${String(num).padStart(2,'0')}`;
       students.push({
+        grade,
         cls: +cls,
         num: +num,
         newId,
@@ -538,7 +558,7 @@ function renderStudents() {
     let html = `
       <div class="student-card">
         <div class="student-card-header">
-          <div class="student-card-title">2학년 ${s.cls}반 ${s.num}번</div>
+          <div class="student-card-title">${s.grade ? s.grade + '학년 ' : ''}${s.cls}반 ${s.num}번</div>
           <div class="student-card-name">${s.name}</div>
           <div class="student-card-sub">학번 ${s.newId} · 총 ${totalExams}과목 응시</div>
         </div>
