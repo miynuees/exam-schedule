@@ -181,8 +181,15 @@
     font-size: 13px; font-weight: 600;
     color: var(--accent); margin-bottom: 3px;
   }
+  .student-card-nameline {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px;
+  }
   .student-card-name { font-size: 18px; font-weight: 700; }
-  .student-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .student-card-count {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap; font-weight: 500;
+  }
 
   .schedule-table {
     width: 100%; border-collapse: collapse;
@@ -255,11 +262,48 @@
   }
   .empty-state .ico { font-size: 48px; margin-bottom: 12px; }
 
+  /* 탭 네비 */
+  .tab-bar {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 6px; margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(107,127,245,0.04);
+    position: sticky; top: 8px; z-index: 50;
+  }
+  .tab {
+    flex: 1; min-width: 120px;
+    padding: 10px 14px; border-radius: 10px;
+    background: transparent; color: var(--muted);
+    border: none; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    box-shadow: none;
+  }
+  .tab:hover { background: var(--accent-soft); color: var(--accent); transform: none; box-shadow: none; }
+  .tab.active {
+    background: linear-gradient(135deg, #6b7ff5 0%, #8a7ff5 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(107,127,245,0.2);
+  }
+  .tab .check {
+    background: #4caf50; color: #fff;
+    font-size: 11px; padding: 1px 6px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .tab.active .check { background: rgba(255,255,255,0.3); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
   /* 인쇄 */
   @media print {
     body { background: #fff; padding: 0; }
-    .no-print, .upload-card, .exam-card, .toolbar { display: none !important; }
+    .no-print, .toolbar, .tab-bar, .tab-panel { display: none !important; }
     .container { max-width: none; }
+    .result-card { display: block !important; }
+    .card { border: none; box-shadow: none; padding: 0; margin: 0; }
+    .card h2 { display: none; }
+    #resultEmpty { display: none !important; }
     .grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
     .student-card {
       border: 1px solid #666; padding: 8px 10px;
@@ -268,7 +312,7 @@
     .student-card-header { padding-bottom: 5px; margin-bottom: 6px; }
     .student-card-title { font-size: 11px; }
     .student-card-name { font-size: 14px; }
-    .student-card-sub { font-size: 10.5px; }
+    .student-card-count { font-size: 10.5px; }
     .schedule-table { font-size: 10.5px; }
     .schedule-table th { font-size: 10px; padding: 3px 2px; }
     .schedule-table td { padding: 4px 3px; }
@@ -288,7 +332,7 @@
     }
     body.print-one .student-card-title { font-size: 20px; }
     body.print-one .student-card-name { font-size: 28px; }
-    body.print-one .student-card-sub { font-size: 14px; }
+    body.print-one .student-card-count { font-size: 14px; }
     body.print-one .schedule-table { font-size: 16px; }
     body.print-one .schedule-table th { font-size: 15px; padding: 10px 6px; }
     body.print-one .schedule-table td { padding: 12px 8px; }
@@ -311,54 +355,77 @@
   <span class="privacy">🔒 학생 정보는 브라우저 안에서만 처리됨 · 서버 전송 X</span>
   <p class="subtitle">선택과목 명렬표 엑셀을 올리면 학생별 시험 시간표가 자동 생성됩니다.</p>
 
+  <!-- 탭 바 (설정용) -->
+  <div class="tab-bar no-print">
+    <button class="tab active" data-tab="upload">📤 1. 엑셀 업로드 <span id="check-upload" class="check" style="display:none;">✓</span></button>
+    <button class="tab" data-tab="exam">📅 2. 시험 시간표</button>
+    <button class="tab" data-tab="room">📍 3. 고사실 배정</button>
+  </div>
+
   <!-- 1. 엑셀 업로드 -->
-  <div class="card upload-card">
-    <h2 class="upload">1단계 · 선택과목 엑셀 업로드</h2>
-    <div class="upload-row">
-      <input type="file" id="fileInput" accept=".xlsx,.xls">
-      <span style="color: var(--muted); font-size: 13px;">첫 번째 시트 자동 사용 · 헤더 자동 감지 (반/번호/이름/과목들)</span>
+  <div class="tab-panel active" data-panel="upload">
+    <div class="card upload-card">
+      <h2 class="upload">엑셀 업로드</h2>
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <span style="color: var(--muted); font-size: 13px;">첫 번째 시트 자동 사용 · 헤더 자동 감지 (반/번호/이름/과목들)</span>
+      </div>
+      <div id="fileStatus"></div>
+      <div id="uploadNextHint" style="display:none; margin-top:12px; padding:10px 14px; background:var(--accent-soft); border-radius:8px; font-size:13px; color:var(--accent);">
+        ✅ 업로드 완료! 다음 탭(📅 시험 시간표 → 📍 고사실 배정)에서 설정을 이어가세요.
+      </div>
     </div>
-    <div id="fileStatus"></div>
   </div>
 
   <!-- 2. 시험 시간표 -->
-  <div class="card exam-card">
-    <h2 class="exam">2단계 · 시험 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(필요하면 직접 수정)</span></h2>
-    <div id="examTableArea"></div>
-    <div style="margin-top:8px; font-size:12px; color:var(--muted);">
-      💡 입실 시간은 시작 시간보다 자동으로 10분 전으로 계산됩니다.<br>
-      💡 "공통" 칸을 클릭하면 공통/선택을 토글할 수 있어요. 공통은 모든 학생, 선택은 해당 과목 신청자만 응시.<br>
-      💡 <strong>응시 인원이 0명이면</strong> 과목명이 엑셀의 컬럼명과 정확히 일치하지 않는 거예요. 과목명 확인!
+  <div class="tab-panel" data-panel="exam">
+    <div class="card exam-card">
+      <h2 class="exam">시험 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(필요하면 직접 수정)</span></h2>
+      <div id="examTableArea"></div>
+      <div style="margin-top:8px; font-size:12px; color:var(--muted);">
+        💡 입실 시간은 시작 시간보다 자동으로 10분 전으로 계산됩니다.<br>
+        💡 "공통" 칸을 클릭하면 공통/선택을 토글할 수 있어요. 공통은 모든 학생, 선택은 해당 과목 신청자만 응시.<br>
+        💡 <strong>응시 인원이 0명이면</strong> 과목명이 엑셀의 컬럼명과 정확히 일치하지 않는 거예요. 과목명 확인!
+      </div>
     </div>
   </div>
 
   <!-- 3. 고사실 배정 -->
-  <div class="card" id="roomCard" style="display:none;">
-    <h2>📍 3단계 · 고사실 배정 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(엑셀 업로드 후 자동 감지)</span></h2>
-    <div id="roomArea"></div>
-  </div>
-
-  <!-- 4. 결과 -->
-  <div class="card result-card" id="resultCard" style="display:none;">
-    <h2 class="result">4단계 · 학생별 시간표</h2>
-    <div class="toolbar">
-      <label>반: <select id="classFilter"><option value="all">전체</option></select></label>
-      <label>검색: <input type="text" id="searchInput" placeholder="이름/학번"></label>
-      <label>인쇄 모드:
-        <select id="printMode">
-          <option value="compact">여러명 한 페이지</option>
-          <option value="one">1명 1페이지</option>
-        </select>
-      </label>
-      <button onclick="window.print()">🖨️ 인쇄 / PDF</button>
-      <span class="count" id="count"></span>
+  <div class="tab-panel" data-panel="room">
+    <div class="card" id="roomCard">
+      <h2>고사실 배정 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(엑셀 업로드 후 자동 감지)</span></h2>
+      <div id="roomArea">
+        <div style="color:var(--muted); font-size:13px; text-align:center; padding:40px 0;">
+          📂 먼저 1번 탭에서 엑셀을 업로드해주세요.
+        </div>
+      </div>
     </div>
-    <div class="grid" id="grid"></div>
   </div>
 
-  <div class="card empty-state" id="emptyState">
-    <div class="ico">📂</div>
-    <div>위에서 선택과목 엑셀을 업로드해 주세요!</div>
+  <!-- 결과 (탭 밖, 항상 아래에 표시) -->
+  <div class="card result-card" id="resultCard" style="margin-top: 20px;">
+    <h2 class="result">학생별 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(위 설정이 실시간으로 반영됩니다)</span></h2>
+    <div id="resultEmpty" style="color:var(--muted); font-size:13px; text-align:center; padding:40px 0;">
+      📂 먼저 1번 탭에서 엑셀을 업로드해주세요.
+    </div>
+    <div id="resultContent" style="display:none;">
+      <div class="toolbar">
+        <label>반: <select id="classFilter"><option value="all">전체</option></select></label>
+        <label>검색: <input type="text" id="searchInput" placeholder="이름/학번"></label>
+        <label>인쇄 모드:
+          <select id="printMode">
+            <option value="compact">여러명 한 페이지</option>
+            <option value="one">1명 1페이지</option>
+          </select>
+        </label>
+        <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+          <input type="checkbox" id="showRoom" checked> 고사실 표시
+        </label>
+        <button onclick="window.print()">🖨️ 인쇄 / PDF</button>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
   </div>
 </div>
 
@@ -533,13 +600,13 @@ function detectSubjectGroups() {
 }
 
 function renderRoomCard() {
-  const card = document.getElementById('roomCard');
   const area = document.getElementById('roomArea');
   if (students.length === 0 || schedule.length === 0) {
-    card.style.display = 'none';
+    area.innerHTML = `<div style="color:var(--muted); font-size:13px; text-align:center; padding:40px 0;">
+      📂 먼저 1번 탭에서 엑셀을 업로드해주세요.
+    </div>`;
     return;
   }
-  card.style.display = 'block';
 
   // 시험시간표의 과목을 공통/선택으로 분류 (중복 제거)
   const commonSet = new Set(), electSet = new Set();
@@ -560,7 +627,7 @@ function renderRoomCard() {
       const val = commonRooms[sub] || '';
       html += `<div class="room-row common">
         <span class="subj-name">${sub}</span>
-        <input type="text" value="${val}" placeholder="예: 체육관 (비워도 됨)" data-room-type="common" data-subj="${encodeURIComponent(sub)}">
+        <input type="text" value="${val}" placeholder="예: 2-1 (비우면 본인 반)" data-room-type="common" data-subj="${encodeURIComponent(sub)}">
       </div>`;
     });
     html += `</div>`;
@@ -618,9 +685,9 @@ function getRoomFor(student, p) {
   if (p.common) {
     const override = commonRooms[p.subject];
     if (override && override.trim()) return override.trim();
-    // 기본값: 본인 반 교실
-    const gradePart = student.grade ? `${student.grade}학년 ` : '';
-    return `${gradePart}${student.cls}반 교실`;
+    // 기본값: 본인 반 (예: 2-1)
+    const gradePart = student.grade ? `${student.grade}-` : '';
+    return `${gradePart}${student.cls}`;
   } else {
     const myGrp = student.subjects.find(([sub]) => normalize(sub) === normalize(p.subject))?.[1];
     if (!myGrp) return '—';
@@ -708,8 +775,10 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     const classFilter = document.getElementById('classFilter');
     classFilter.innerHTML = '<option value="all">전체</option>' + classes.map(c => `<option value="${c}">${c}반</option>`).join('');
 
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultEmpty').style.display = 'none';
+    document.getElementById('resultContent').style.display = 'block';
+    document.getElementById('check-upload').style.display = 'inline-block';
+    document.getElementById('uploadNextHint').style.display = 'block';
     renderExamTable();
     renderRoomCard();
     renderStudents();
@@ -737,6 +806,7 @@ function renderStudents() {
   const classVal = document.getElementById('classFilter').value;
   const searchVal = document.getElementById('searchInput').value.trim();
   const printMode = document.getElementById('printMode').value;
+  const showRoom = document.getElementById('showRoom').checked;
   document.body.classList.toggle('print-one', printMode === 'one');
 
   const filtered = students.filter(s => {
@@ -760,22 +830,27 @@ function renderStudents() {
       <div class="student-card">
         <div class="student-card-header">
           <div class="student-card-title">${s.grade ? s.grade + '학년 ' : ''}${s.cls}반 ${s.num}번</div>
-          <div class="student-card-name">${s.name}</div>
-          <div class="student-card-sub">학번 ${s.newId} · 총 ${totalExams}과목 응시</div>
+          <div class="student-card-nameline">
+            <span class="student-card-name">${s.name}</span>
+            <span class="student-card-count">총 ${totalExams}과목 응시</span>
+          </div>
         </div>
         <table class="schedule-table">
           <colgroup>
-            <col style="width:22%"><col style="width:11%"><col style="width:25%"><col style="width:22%"><col style="width:20%">
+            ${showRoom
+              ? '<col style="width:22%"><col style="width:11%"><col style="width:25%"><col style="width:22%"><col style="width:20%">'
+              : '<col style="width:26%"><col style="width:14%"><col style="width:30%"><col style="width:30%">'}
           </colgroup>
           <thead>
-            <tr><th>날짜</th><th>교시</th><th>시간</th><th>과목</th><th>고사실</th></tr>
+            <tr><th>날짜</th><th>교시</th><th>시간</th><th>과목</th>${showRoom ? '<th>고사실</th>' : ''}</tr>
           </thead>
           <tbody>
     `;
     personal.forEach(day => {
       const taken = day.periods.filter(p => p.takes);
+      const emptyCols = showRoom ? 4 : 3;
       if (taken.length === 0) {
-        html += `<tr><td class="date-cell">${day.date}</td><td colspan="4" class="free">시험 없음 · 등교 후 출석체크</td></tr>`;
+        html += `<tr><td class="date-cell">${day.date}</td><td colspan="${emptyCols}" class="free">시험 없음 · 등교 후 출석체크</td></tr>`;
       } else {
         taken.forEach((p, idx) => {
           const rowClass = p.common ? 'row-common' : 'row-elect';
@@ -783,13 +858,15 @@ function renderStudents() {
           const isShort = p.minutes !== 50;
           const timeClass = isShort ? 'time-cell short' : 'time-cell';
           const enter = minus10min(p.start);
-          const room = getRoomFor(s, p);
           html += `<tr class="${rowClass}">`;
           if (idx === 0) html += `<td class="date-cell" rowspan="${taken.length}">${day.date}</td>`;
           html += `<td class="period-cell">${p.p}교시</td>`;
           html += `<td class="${timeClass}"><span class="enter">입실 ${enter}</span><span class="start">${p.start} ~ ${p.end}</span><span class="dur">${p.minutes}분</span></td>`;
           html += `<td class="subj">${p.subject}<span class="type">${typeLabel}</span></td>`;
-          html += `<td class="room-cell">${room}</td>`;
+          if (showRoom) {
+            const room = getRoomFor(s, p);
+            html += `<td class="room-cell">${room}</td>`;
+          }
           html += `</tr>`;
         });
       }
@@ -806,6 +883,17 @@ function renderStudents() {
 document.getElementById('classFilter').addEventListener('change', renderStudents);
 document.getElementById('searchInput').addEventListener('input', renderStudents);
 document.getElementById('printMode').addEventListener('change', renderStudents);
+document.getElementById('showRoom').addEventListener('change', renderStudents);
+
+/* 탭 전환 */
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === target));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === target));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
 
 /* 초기 렌더 */
 renderExamTable();
