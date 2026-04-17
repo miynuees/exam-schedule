@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개인별 중간고사 시간표</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #fef6f4;
+    --bg2: #eef2ff;
+    --card: #ffffff;
+    --accent: #6b7ff5;
+    --accent-soft: #eef1ff;
+    --accent-pink: #ffb8c8;
+    --border: #ece5f0;
+    --text: #3b3654;
+    --muted: #8b8699;
+    --common: #5b8ee8;
+    --elect: #e8855b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+    margin: 0; padding: 24px;
+    background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 100%);
+    background-attachment: fixed;
+    color: var(--text);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+  h1 {
+    margin: 0 0 4px; font-size: 26px; font-weight: 700;
+    background: linear-gradient(90deg, #6b7ff5 0%, #ff8ba7 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+  }
+  h1::before { content: "📝 "; -webkit-text-fill-color: initial; }
+  .subtitle { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+  .subtitle::before { content: "✨ "; }
+  .privacy {
+    display: inline-block; margin-left: 8px;
+    padding: 3px 10px; border-radius: 999px;
+    background: #e8f5e9; color: #2e7d32;
+    font-size: 11px; font-weight: 600;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  .card {
+    background: var(--card); border-radius: 18px; padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 16px rgba(107, 127, 245, 0.06), 0 1px 3px rgba(0,0,0,0.03);
+    border: 1px solid var(--border);
+  }
+  .card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 700; }
+  .card h2.upload::before { content: "📤 "; }
+  .card h2.exam::before { content: "📅 "; }
+  .card h2.result::before { content: "🎯 "; }
+
+  .upload-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  input[type="file"], input[type="text"], select, button {
+    font-family: inherit; font-size: 14px;
+    padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 10px; background: #fff;
+    transition: all 0.15s;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(107, 127, 245, 0.12);
+  }
+  button {
+    background: linear-gradient(135deg, #6b7ff5 0%, #8a7ff5 100%);
+    color: #fff; border: none;
+    cursor: pointer; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(107, 127, 245, 0.2);
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(107, 127, 245, 0.3); }
+  button.ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); box-shadow: none; }
+  button.ghost:hover { background: var(--accent-soft); }
+  .status {
+    margin-top: 8px; padding: 8px 12px;
+    border-radius: 8px; font-size: 13px;
+  }
+  .status.ok { background: #e8f5e9; color: #2e7d32; }
+  .status.err { background: #ffebee; color: #c62828; white-space: pre-wrap; }
+  .status.info { background: var(--accent-soft); color: var(--accent); }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-bottom: 12px;
+  }
+  .toolbar label { font-size: 13px; color: var(--muted); }
+  .toolbar .count { color: var(--muted); font-size: 13px; margin-left: auto; }
+
+  .exam-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .exam-table th, .exam-table td {
+    border: 1px solid var(--border); padding: 6px 8px; text-align: center;
+  }
+  .exam-table th { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .exam-table .row-common { background: #f5f9ff; }
+  .exam-table .row-elect { background: #fff8ef; }
+  .exam-table input {
+    width: 100%; border: none; background: transparent;
+    padding: 2px 4px; text-align: center; font-size: 13px;
+    font-family: inherit;
+  }
+  .exam-table input:focus { outline: 2px solid var(--accent); border-radius: 4px; background: #fff; }
+  .exam-table .common-toggle { cursor: pointer; user-select: none; }
+
+  /* 학생 카드 그리드 */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+  .student-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .student-card-header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 8px; margin-bottom: 10px;
+  }
+  .student-card-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--accent); margin-bottom: 3px;
+  }
+  .student-card-name { font-size: 18px; font-weight: 700; }
+  .student-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .schedule-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12.5px; table-layout: fixed;
+  }
+  .schedule-table th, .schedule-table td {
+    border: 1px solid #ccc; padding: 6px 4px; text-align: center;
+    word-break: keep-all; line-height: 1.35;
+  }
+  .schedule-table th {
+    background: var(--accent-soft); color: var(--accent);
+    font-weight: 600; font-size: 11.5px; padding: 5px 2px;
+  }
+  .date-cell {
+    background: #f7f7f9; font-weight: 600;
+    white-space: nowrap; font-size: 12px;
+  }
+  .period-cell { font-weight: 600; color: #555; white-space: nowrap; }
+  .time-cell {
+    font-size: 11.5px; white-space: nowrap; line-height: 1.35;
+  }
+  .time-cell .enter {
+    display: block; color: var(--common); font-size: 10.5px;
+  }
+  .time-cell .start { display: block; font-weight: 600; }
+  .time-cell.short .start {
+    color: #d4351c; background: #fff2ed;
+    padding: 1px 3px; border-radius: 3px; font-weight: 700;
+  }
+  .time-cell .dur {
+    display: block; color: #888; font-size: 10px; margin-top: 1px;
+  }
+  .time-cell.short .dur { color: #d4351c; font-weight: 600; }
+  .subj {
+    font-weight: 700; color: #1a1a1a;
+    font-size: 12.5px; line-height: 1.3;
+  }
+  .subj .type {
+    display: block; font-weight: 500;
+    font-size: 10px; margin-top: 1px;
+  }
+  .row-common { background: #f5f9ff; }
+  .row-common .subj .type { color: var(--common); }
+  .row-elect  { background: #fff8ef; }
+  .row-elect  .subj .type { color: var(--elect); }
+  .free {
+    color: #888; font-style: italic;
+    font-size: 11.5px; background: #fafafa;
+  }
+  .summary {
+    margin-top: 10px; padding: 8px 10px;
+    background: #fafaf7; border-radius: 6px;
+    font-size: 11.5px; color: #555;
+    line-height: 1.5; word-break: keep-all;
+  }
+  .summary strong { color: #1a1a1a; }
+  .notice {
+    margin-top: 8px; font-size: 11px;
+    color: #c05621; line-height: 1.4;
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state .ico { font-size: 48px; margin-bottom: 12px; }
+
+  /* 인쇄 */
+  @media print {
+    body { background: #fff; padding: 0; }
+    .no-print, .upload-card, .exam-card, .toolbar { display: none !important; }
+    .container { max-width: none; }
+    .grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .student-card {
+      border: 1px solid #666; padding: 8px 10px;
+      page-break-inside: avoid; border-radius: 6px;
+    }
+    .student-card-header { padding-bottom: 5px; margin-bottom: 6px; }
+    .student-card-title { font-size: 11px; }
+    .student-card-name { font-size: 14px; }
+    .student-card-sub { font-size: 10.5px; }
+    .schedule-table { font-size: 10.5px; }
+    .schedule-table th { font-size: 10px; padding: 3px 2px; }
+    .schedule-table td { padding: 4px 3px; }
+    .date-cell { font-size: 10.5px; }
+    .time-cell { font-size: 9.5px; }
+    .time-cell .enter { font-size: 9px; }
+    .time-cell .dur { font-size: 8.5px; }
+    .subj { font-size: 10.5px; }
+    .subj .type { font-size: 8.5px; }
+    .summary { font-size: 10px; padding: 5px 7px; margin-top: 6px; }
+    .notice { font-size: 9.5px; margin-top: 5px; }
+    body.print-one .grid { grid-template-columns: 1fr; }
+    body.print-one .student-card {
+      page-break-after: always; border: 2px solid var(--accent);
+      padding: 30px; min-height: 70vh;
+    }
+    body.print-one .student-card-title { font-size: 20px; }
+    body.print-one .student-card-name { font-size: 28px; }
+    body.print-one .student-card-sub { font-size: 14px; }
+    body.print-one .schedule-table { font-size: 16px; }
+    body.print-one .schedule-table th { font-size: 15px; padding: 10px 6px; }
+    body.print-one .schedule-table td { padding: 12px 8px; }
+    body.print-one .date-cell { font-size: 16px; }
+    body.print-one .time-cell { font-size: 14px; }
+    body.print-one .time-cell .enter { font-size: 13px; }
+    body.print-one .time-cell .dur { font-size: 12px; }
+    body.print-one .subj { font-size: 17px; }
+    body.print-one .subj .type { font-size: 12px; }
+    body.print-one .summary { font-size: 13px; }
+  }
+  @page { margin: 1cm; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>개인별 중간고사 시간표</h1>
+  <span class="privacy">🔒 학생 정보는 브라우저 안에서만 처리됨 · 서버 전송 X</span>
+  <p class="subtitle">선택과목 명렬표 엑셀을 올리면 학생별 시험 시간표가 자동 생성됩니다.</p>
+
+  <!-- 1. 엑셀 업로드 -->
+  <div class="card upload-card">
+    <h2 class="upload">1단계 · 선택과목 엑셀 업로드</h2>
+    <div class="upload-row">
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+      <span style="color: var(--muted); font-size: 13px;">"2학년 선택과목" 시트 자동 인식</span>
+    </div>
+    <div id="fileStatus"></div>
+  </div>
+
+  <!-- 2. 시험 시간표 -->
+  <div class="card exam-card">
+    <h2 class="exam">2단계 · 시험 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(필요하면 직접 수정)</span></h2>
+    <div id="examTableArea"></div>
+    <div style="margin-top:8px; font-size:12px; color:var(--muted);">
+      💡 입실 시간은 시작 시간보다 자동으로 10분 전으로 계산됩니다.<br>
+      💡 "공통" 칸을 클릭하면 공통/선택을 토글할 수 있어요. 공통은 모든 학생, 선택은 해당 과목 신청자만 응시.
+    </div>
+  </div>
+
+  <!-- 3. 결과 -->
+  <div class="card result-card" id="resultCard" style="display:none;">
+    <h2 class="result">3단계 · 학생별 시간표</h2>
+    <div class="toolbar">
+      <label>반: <select id="classFilter"><option value="all">전체</option></select></label>
+      <label>검색: <input type="text" id="searchInput" placeholder="이름/학번"></label>
+      <label>인쇄 모드:
+        <select id="printMode">
+          <option value="compact">여러명 한 페이지</option>
+          <option value="one">1명 1페이지</option>
+        </select>
+      </label>
+      <button onclick="window.print()">🖨️ 인쇄 / PDF</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="card empty-state" id="emptyState">
+    <div class="ico">📂</div>
+    <div>위에서 선택과목 엑셀을 업로드해 주세요!</div>
+  </div>
+</div>
+
+<script>
+/* ============== 시험 시간표 (편집 가능) ============== */
+let schedule = [
+  { date: "4월 22일 (수)", periods: [
+    { p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "영어1", common: true },
+    { p: 2, start: "09:30", end: "10:00", minutes: 30, subject: "인공지능수학", common: false },
+  ]},
+  { date: "4월 23일 (목)", periods: [
+    { p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "대수", common: true },
+    { p: 2, start: "09:30", end: "10:10", minutes: 40, subject: "지구과학", common: false },
+  ]},
+  { date: "4월 24일 (금)", periods: [
+    { p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "문학", common: true },
+    { p: 2, start: "09:30", end: "10:20", minutes: 50, subject: "물질과에너지", common: false },
+  ]},
+  { date: "4월 27일 (월)", periods: [
+    { p: 1, start: "08:20", end: "09:00", minutes: 40, subject: "윤리와사상", common: false },
+    { p: 2, start: "09:20", end: "10:10", minutes: 50, subject: "생명과학", common: false },
+  ]},
+  { date: "4월 28일 (화)", periods: [
+    { p: 1, start: "08:20", end: "08:50", minutes: 30, subject: "법과사회", common: false },
+    { p: 2, start: "09:10", end: "10:00", minutes: 50, subject: "역학과에너지", common: false },
+  ]}
+];
+
+let students = [];
+
+/* ============== 유틸 ============== */
+function normalize(s) { return (s || '').toString().replace(/\s+/g, ''); }
+function minus10min(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = h * 60 + m - 10;
+  const nh = Math.floor(total / 60), nm = total % 60;
+  return String(nh).padStart(2, '0') + ':' + String(nm).padStart(2, '0');
+}
+function diffMinutes(start, end) {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
+/* ============== 시험 시간표 편집 UI ============== */
+function renderExamTable() {
+  const area = document.getElementById('examTableArea');
+  let html = '<table class="exam-table"><thead><tr><th>날짜</th><th>교시</th><th>시작</th><th>종료</th><th>시간(분)</th><th>과목명</th><th>구분</th><th></th></tr></thead><tbody>';
+  schedule.forEach((day, di) => {
+    day.periods.forEach((p, pi) => {
+      const cls = p.common ? 'row-common' : 'row-elect';
+      html += `<tr class="${cls}">`;
+      if (pi === 0) {
+        html += `<td rowspan="${day.periods.length}" style="background:#f7f7f9;font-weight:600;"><input type="text" value="${day.date}" data-d="${di}" data-f="date" style="font-weight:600;"></td>`;
+      }
+      html += `<td>${p.p}교시</td>`;
+      html += `<td><input type="text" value="${p.start}" data-d="${di}" data-p="${pi}" data-f="start"></td>`;
+      html += `<td><input type="text" value="${p.end}" data-d="${di}" data-p="${pi}" data-f="end"></td>`;
+      html += `<td>${p.minutes}분</td>`;
+      html += `<td><input type="text" value="${p.subject}" data-d="${di}" data-p="${pi}" data-f="subject" style="font-weight:600;"></td>`;
+      html += `<td class="common-toggle" data-d="${di}" data-p="${pi}">${p.common ? '공통' : '선택'}</td>`;
+      html += `<td><button class="ghost" data-action="del" data-d="${di}" data-p="${pi}" style="font-size:11px; padding:4px 8px;">삭제</button></td>`;
+      html += `</tr>`;
+    });
+  });
+  html += '</tbody></table>';
+  html += `<div style="display:flex; gap:8px; margin-top:8px;">
+    <button class="ghost" id="addDayBtn" style="font-size:12px;">+ 날짜 추가</button>
+    <button class="ghost" id="addPeriodBtn" style="font-size:12px;">+ 마지막 날에 교시 추가</button>
+  </div>`;
+  area.innerHTML = html;
+
+  // 이벤트
+  area.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const d = +inp.dataset.d, p = inp.dataset.p !== undefined ? +inp.dataset.p : null, f = inp.dataset.f;
+      if (f === 'date') schedule[d].date = inp.value;
+      else if (f === 'subject') schedule[d].periods[p].subject = inp.value;
+      else if (f === 'start' || f === 'end') {
+        schedule[d].periods[p][f] = inp.value;
+        schedule[d].periods[p].minutes = diffMinutes(schedule[d].periods[p].start, schedule[d].periods[p].end);
+      }
+      renderExamTable();
+      renderStudents();
+    });
+  });
+  area.querySelectorAll('.common-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const d = +el.dataset.d, p = +el.dataset.p;
+      schedule[d].periods[p].common = !schedule[d].periods[p].common;
+      renderExamTable();
+      renderStudents();
+    });
+  });
+  area.querySelectorAll('button[data-action="del"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = +btn.dataset.d, p = +btn.dataset.p;
+      schedule[d].periods.splice(p, 1);
+      if (schedule[d].periods.length === 0) schedule.splice(d, 1);
+      renderExamTable();
+      renderStudents();
+    });
+  });
+  document.getElementById('addDayBtn').addEventListener('click', () => {
+    schedule.push({ date: "새 날짜", periods: [{ p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "과목명", common: true }] });
+    renderExamTable();
+    renderStudents();
+  });
+  document.getElementById('addPeriodBtn').addEventListener('click', () => {
+    if (schedule.length === 0) return;
+    const last = schedule[schedule.length - 1];
+    const newP = last.periods.length + 1;
+    last.periods.push({ p: newP, start: "09:30", end: "10:20", minutes: 50, subject: "과목명", common: false });
+    renderExamTable();
+    renderStudents();
+  });
+}
+
+/* ============== 엑셀 파싱 ============== */
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('fileStatus');
+  status.className = 'status info';
+  status.textContent = '읽는 중...';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    // "2학년 선택과목" 시트 찾기 (정확한 이름 또는 비슷한 패턴)
+    let sheetName = wb.SheetNames.find(n => n === '2학년 선택과목');
+    if (!sheetName) sheetName = wb.SheetNames.find(n => /^2학년.*선택과목$/.test(n) && !/분반코드별|기재|배부/.test(n));
+    if (!sheetName) {
+      throw new Error(`"2학년 선택과목" 시트를 찾을 수 없습니다.\n현재 시트 목록: ${wb.SheetNames.join(', ')}`);
+    }
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
+    // 2번째 행이 헤더 (첫 행은 약자)
+    const header = rows[1];
+    if (!header) throw new Error('헤더를 찾을 수 없습니다.');
+    // 5번째 컬럼(인덱스 5)부터 과목명
+    const subjectCols = {};
+    for (let i = 5; i < header.length; i++) {
+      if (header[i]) subjectCols[i] = header[i];
+    }
+
+    students = [];
+    for (let i = 2; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || !r[0] || r[0] !== 2) continue;
+      const cls = r[1], num = r[2], oldId = r[3], name = r[4];
+      if (!cls || !num || !name) continue;
+      const subjects = [];
+      for (const [colIdx, subjName] of Object.entries(subjectCols)) {
+        const val = r[colIdx];
+        if (val) subjects.push([subjName, String(val).trim()]);
+      }
+      students.push({
+        cls: +cls,
+        num: +num,
+        oldId: oldId,
+        name: String(name).trim(),
+        subjects
+      });
+    }
+
+    if (students.length === 0) throw new Error('학생 데이터를 찾지 못했습니다. 시트 형식을 확인해 주세요.');
+
+    status.className = 'status ok';
+    status.textContent = `✅ ${students.length}명 데이터 로드 완료!`;
+
+    // 반 필터 채우기
+    const classes = [...new Set(students.map(s => s.cls))].sort((a, b) => a - b);
+    const classFilter = document.getElementById('classFilter');
+    classFilter.innerHTML = '<option value="all">전체</option>' + classes.map(c => `<option value="${c}">${c}반</option>`).join('');
+
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'block';
+    renderStudents();
+  } catch (err) {
+    status.className = 'status err';
+    status.textContent = '❌ ' + err.message;
+    console.error(err);
+  }
+});
+
+/* ============== 학생 카드 렌더링 ============== */
+function buildScheduleForStudent(student) {
+  const chosen = new Set(student.subjects.map(([sub, grp]) => normalize(sub)));
+  return schedule.map(day => ({
+    date: day.date,
+    periods: day.periods.map(p => {
+      const takes = p.common || chosen.has(normalize(p.subject));
+      return { ...p, takes };
+    })
+  }));
+}
+
+function renderStudents() {
+  if (students.length === 0) return;
+  const classVal = document.getElementById('classFilter').value;
+  const searchVal = document.getElementById('searchInput').value.trim();
+  const printMode = document.getElementById('printMode').value;
+  document.body.classList.toggle('print-one', printMode === 'one');
+
+  const filtered = students.filter(s => {
+    if (classVal !== 'all' && String(s.cls) !== classVal) return false;
+    if (searchVal) {
+      const q = searchVal.toLowerCase();
+      if (!s.name.toLowerCase().includes(q) && !String(s.oldId).includes(q) && !String(s.num).includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('count').textContent = `${filtered.length}명`;
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  filtered.forEach(s => {
+    const personal = buildScheduleForStudent(s);
+    const totalExams = personal.reduce((sum, d) => sum + d.periods.filter(p => p.takes).length, 0);
+
+    let html = `
+      <div class="student-card">
+        <div class="student-card-header">
+          <div class="student-card-title">2학년 ${s.cls}반 ${s.num}번</div>
+          <div class="student-card-name">${s.name}</div>
+          <div class="student-card-sub">학번 ${s.oldId} · 총 ${totalExams}과목 응시</div>
+        </div>
+        <table class="schedule-table">
+          <colgroup>
+            <col style="width:26%"><col style="width:14%"><col style="width:30%"><col style="width:30%">
+          </colgroup>
+          <thead>
+            <tr><th>날짜</th><th>교시</th><th>시간</th><th>과목</th></tr>
+          </thead>
+          <tbody>
+    `;
+    personal.forEach(day => {
+      const taken = day.periods.filter(p => p.takes);
+      if (taken.length === 0) {
+        html += `<tr><td class="date-cell">${day.date}</td><td colspan="3" class="free">시험 없음 · 등교 후 출석체크</td></tr>`;
+      } else {
+        taken.forEach((p, idx) => {
+          const rowClass = p.common ? 'row-common' : 'row-elect';
+          const typeLabel = p.common ? '공통' : '선택';
+          const isShort = p.minutes !== 50;
+          const timeClass = isShort ? 'time-cell short' : 'time-cell';
+          const enter = minus10min(p.start);
+          html += `<tr class="${rowClass}">`;
+          if (idx === 0) html += `<td class="date-cell" rowspan="${taken.length}">${day.date}</td>`;
+          html += `<td class="period-cell">${p.p}교시</td>`;
+          html += `<td class="${timeClass}"><span class="enter">입실 ${enter}</span><span class="start">${p.start} ~ ${p.end}</span><span class="dur">${p.minutes}분</span></td>`;
+          html += `<td class="subj">${p.subject}<span class="type">${typeLabel}</span></td>`;
+          html += `</tr>`;
+        });
+      }
+    });
+    html += `</tbody></table>`;
+    const elects = s.subjects.map(([sub, grp]) => `${sub}(${grp})`).join(', ');
+    html += `<div class="summary"><strong>선택과목:</strong> ${elects}</div>`;
+    html += `<div class="notice">※ 시험이 없는 시간·날에도 반드시 등교하여 출석체크를 해야 합니다.</div>`;
+    html += `</div>`;
+    grid.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+document.getElementById('classFilter').addEventListener('change', renderStudents);
+document.getElementById('searchInput').addEventListener('input', renderStudents);
+document.getElementById('printMode').addEventListener('change', renderStudents);
+
+/* 초기 렌더 */
+renderExamTable();
+</script>
+</body>
+</html>
