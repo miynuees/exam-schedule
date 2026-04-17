@@ -111,6 +111,56 @@
   }
   .exam-table input:focus { outline: 2px solid var(--accent); border-radius: 4px; background: #fff; }
   .exam-table .common-toggle { cursor: pointer; user-select: none; }
+  /* 날짜 컨트롤 셀 (가로폭 축소 + 미니 버튼) */
+  .exam-table td.date-control {
+    background: #f7f7f9; font-weight: 600;
+    width: 115px; padding: 5px 6px;
+  }
+  .exam-table td.date-control input {
+    font-weight: 600; font-size: 12px; text-align: center;
+  }
+  .date-btns {
+    display: flex; gap: 3px; margin-top: 4px; justify-content: center;
+  }
+  .date-btns .mini {
+    font-size: 11px; padding: 3px 6px;
+    background: #fff; color: var(--accent);
+    border: 1px solid var(--border); border-radius: 5px;
+    box-shadow: none; font-weight: 500;
+    cursor: pointer; font-family: inherit;
+  }
+  .date-btns .mini:hover { background: var(--accent-soft); transform: none; box-shadow: none; }
+  .date-btns .mini-add { flex: 1; }
+  .date-btns .mini-del { color: #c62828; padding: 3px 7px; }
+  .date-btns .mini-del:hover { background: #ffebee; }
+  /* 고사실 배정 카드 */
+  .room-section { margin-bottom: 16px; }
+  .room-section h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); font-weight: 700; }
+  .room-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; margin-bottom: 6px;
+    background: #fafbff; border-radius: 8px;
+    flex-wrap: wrap;
+  }
+  .room-row.common { background: #f5f9ff; }
+  .room-row.elect { background: #fff8ef; }
+  .room-row .subj-name {
+    font-weight: 700; min-width: 120px;
+  }
+  .room-row .group-input {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px;
+  }
+  .room-row .group-input .grp-label {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px;
+    font-weight: 700; color: var(--accent);
+    font-size: 11px;
+  }
+  .room-row input[type="text"] {
+    width: 85px; padding: 5px 8px; font-size: 12px;
+  }
+  .room-row .hint { color: var(--muted); font-size: 12px; margin-left: 4px; }
 
   /* 학생 카드 그리드 */
   .grid {
@@ -174,6 +224,11 @@
     display: block; font-weight: 500;
     font-size: 10px; margin-top: 1px;
   }
+  .room-cell {
+    font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; word-break: keep-all;
+    line-height: 1.3;
+  }
   .row-common { background: #f5f9ff; }
   .row-common .subj .type { color: var(--common); }
   .row-elect  { background: #fff8ef; }
@@ -223,6 +278,7 @@
     .time-cell .dur { font-size: 8.5px; }
     .subj { font-size: 10.5px; }
     .subj .type { font-size: 8.5px; }
+    .room-cell { font-size: 10px; }
     .summary { font-size: 10px; padding: 5px 7px; margin-top: 6px; }
     .notice { font-size: 9.5px; margin-top: 5px; }
     body.print-one .grid { grid-template-columns: 1fr; }
@@ -242,6 +298,7 @@
     body.print-one .time-cell .dur { font-size: 12px; }
     body.print-one .subj { font-size: 17px; }
     body.print-one .subj .type { font-size: 12px; }
+    body.print-one .room-cell { font-size: 15px; }
     body.print-one .summary { font-size: 13px; }
   }
   @page { margin: 1cm; }
@@ -275,9 +332,15 @@
     </div>
   </div>
 
-  <!-- 3. 결과 -->
+  <!-- 3. 고사실 배정 -->
+  <div class="card" id="roomCard" style="display:none;">
+    <h2>📍 3단계 · 고사실 배정 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(엑셀 업로드 후 자동 감지)</span></h2>
+    <div id="roomArea"></div>
+  </div>
+
+  <!-- 4. 결과 -->
   <div class="card result-card" id="resultCard" style="display:none;">
-    <h2 class="result">3단계 · 학생별 시간표</h2>
+    <h2 class="result">4단계 · 학생별 시간표</h2>
     <div class="toolbar">
       <label>반: <select id="classFilter"><option value="all">전체</option></select></label>
       <label>검색: <input type="text" id="searchInput" placeholder="이름/학번"></label>
@@ -325,6 +388,8 @@ let schedule = [
 ];
 
 let students = [];
+let commonRooms = {}; // 과목명 -> 고사실 (빈값이면 본인 반 교실)
+let electRooms = {};  // 과목명 -> { 집단: 고사실 }
 
 /* ============== 유틸 ============== */
 function normalize(s) { return (s || '').toString().replace(/\s+/g, ''); }
@@ -364,10 +429,12 @@ function renderExamTable() {
       }
       html += `<tr class="${cls}">`;
       if (pi === 0) {
-        html += `<td rowspan="${day.periods.length}" style="background:#f7f7f9;font-weight:600;">
-          <input type="text" value="${day.date}" data-d="${di}" data-f="date" style="font-weight:600; margin-bottom:6px;">
-          <button class="ghost" data-action="add-period" data-d="${di}" style="font-size:11px; padding:3px 8px; width:100%;">+ 교시 추가</button>
-          <button class="ghost" data-action="del-day" data-d="${di}" style="font-size:11px; padding:3px 8px; width:100%; margin-top:4px; color:#c62828; border-color:#ffcdd2;">날짜 삭제</button>
+        html += `<td rowspan="${day.periods.length}" class="date-control">
+          <input type="text" value="${day.date}" data-d="${di}" data-f="date">
+          <div class="date-btns">
+            <button class="mini mini-add" data-action="add-period" data-d="${di}">＋교시</button>
+            <button class="mini mini-del" data-action="del-day" data-d="${di}" title="날짜 삭제">🗑</button>
+          </div>
         </td>`;
       }
       html += `<td>${p.p}교시</td>`;
@@ -398,6 +465,7 @@ function renderExamTable() {
         schedule[d].periods[p].minutes = diffMinutes(schedule[d].periods[p].start, schedule[d].periods[p].end);
       }
       renderExamTable();
+      renderRoomCard();
       renderStudents();
     });
   });
@@ -406,6 +474,7 @@ function renderExamTable() {
       const d = +el.dataset.d, p = +el.dataset.p;
       schedule[d].periods[p].common = !schedule[d].periods[p].common;
       renderExamTable();
+      renderRoomCard();
       renderStudents();
     });
   });
@@ -417,6 +486,7 @@ function renderExamTable() {
       schedule[d].periods.forEach((x, i) => x.p = i + 1);
       if (schedule[d].periods.length === 0) schedule.splice(d, 1);
       renderExamTable();
+      renderRoomCard();
       renderStudents();
     });
   });
@@ -427,6 +497,7 @@ function renderExamTable() {
       const newP = day.periods.length + 1;
       day.periods.push({ p: newP, start: "09:30", end: "10:20", minutes: 50, subject: "과목명", common: false });
       renderExamTable();
+      renderRoomCard();
       renderStudents();
     });
   });
@@ -436,14 +507,126 @@ function renderExamTable() {
       if (!confirm(`"${schedule[d].date}" 날짜 전체를 삭제할까요?`)) return;
       schedule.splice(d, 1);
       renderExamTable();
+      renderRoomCard();
       renderStudents();
     });
   });
   document.getElementById('addDayBtn').addEventListener('click', () => {
     schedule.push({ date: "새 날짜", periods: [{ p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "과목명", common: true }] });
     renderExamTable();
+    renderRoomCard();
     renderStudents();
   });
+}
+
+/* ============== 고사실 배정 UI ============== */
+function detectSubjectGroups() {
+  const map = {};
+  students.forEach(s => {
+    s.subjects.forEach(([sub, grp]) => {
+      const k = normalize(sub);
+      if (!map[k]) map[k] = { display: sub, groups: new Set() };
+      map[k].groups.add(grp);
+    });
+  });
+  return map;
+}
+
+function renderRoomCard() {
+  const card = document.getElementById('roomCard');
+  const area = document.getElementById('roomArea');
+  if (students.length === 0 || schedule.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  // 시험시간표의 과목을 공통/선택으로 분류 (중복 제거)
+  const commonSet = new Set(), electSet = new Set();
+  schedule.forEach(d => d.periods.forEach(p => {
+    if (p.common) commonSet.add(p.subject);
+    else electSet.add(p.subject);
+  }));
+
+  const groupsMap = detectSubjectGroups();
+
+  let html = '';
+
+  // 공통 과목
+  if (commonSet.size > 0) {
+    html += `<div class="room-section">
+      <h3>🟦 공통 과목 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(비워두면 학생 본인 반 교실로 자동 배정)</span></h3>`;
+    [...commonSet].forEach(sub => {
+      const val = commonRooms[sub] || '';
+      html += `<div class="room-row common">
+        <span class="subj-name">${sub}</span>
+        <input type="text" value="${val}" placeholder="예: 체육관 (비워도 됨)" data-room-type="common" data-subj="${encodeURIComponent(sub)}">
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // 선택 과목
+  if (electSet.size > 0) {
+    html += `<div class="room-section">
+      <h3>🟧 선택 과목 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(집단별 고사실 입력 — 학생이 실제 있는 집단만 표시)</span></h3>`;
+    [...electSet].forEach(sub => {
+      const info = groupsMap[normalize(sub)];
+      if (!info) {
+        html += `<div class="room-row elect">
+          <span class="subj-name">${sub}</span>
+          <span class="hint">⚠️ 엑셀에서 매칭되는 학생이 없습니다 (과목명 확인)</span>
+        </div>`;
+        return;
+      }
+      const sortedGroups = [...info.groups].sort();
+      html += `<div class="room-row elect">
+        <span class="subj-name">${sub}</span>`;
+      sortedGroups.forEach(grp => {
+        const val = (electRooms[sub] && electRooms[sub][grp]) || '';
+        html += `<span class="group-input">
+          <span class="grp-label">${grp}</span>
+          <input type="text" value="${val}" placeholder="고사실" data-room-type="elect" data-subj="${encodeURIComponent(sub)}" data-grp="${grp}">
+        </span>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+
+  area.innerHTML = html || '<div style="color:var(--muted); font-size:13px;">시험 시간표가 비어있어요.</div>';
+
+  // 입력 이벤트
+  area.querySelectorAll('input[type="text"]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const type = inp.dataset.roomType;
+      const sub = decodeURIComponent(inp.dataset.subj);
+      const v = inp.value;
+      if (type === 'common') {
+        commonRooms[sub] = v;
+      } else {
+        const grp = inp.dataset.grp;
+        if (!electRooms[sub]) electRooms[sub] = {};
+        electRooms[sub][grp] = v;
+      }
+      renderStudents();
+    });
+  });
+}
+
+function getRoomFor(student, p) {
+  if (p.common) {
+    const override = commonRooms[p.subject];
+    if (override && override.trim()) return override.trim();
+    // 기본값: 본인 반 교실
+    const gradePart = student.grade ? `${student.grade}학년 ` : '';
+    return `${gradePart}${student.cls}반 교실`;
+  } else {
+    const myGrp = student.subjects.find(([sub]) => normalize(sub) === normalize(p.subject))?.[1];
+    if (!myGrp) return '—';
+    const room = electRooms[p.subject]?.[myGrp];
+    return room && room.trim() ? room.trim() : `(${myGrp}집단 미배정)`;
+  }
 }
 
 /* ============== 엑셀 파싱 ============== */
@@ -527,6 +710,8 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
 
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('resultCard').style.display = 'block';
+    renderExamTable();
+    renderRoomCard();
     renderStudents();
   } catch (err) {
     status.className = 'status err';
@@ -580,17 +765,17 @@ function renderStudents() {
         </div>
         <table class="schedule-table">
           <colgroup>
-            <col style="width:26%"><col style="width:14%"><col style="width:30%"><col style="width:30%">
+            <col style="width:22%"><col style="width:11%"><col style="width:25%"><col style="width:22%"><col style="width:20%">
           </colgroup>
           <thead>
-            <tr><th>날짜</th><th>교시</th><th>시간</th><th>과목</th></tr>
+            <tr><th>날짜</th><th>교시</th><th>시간</th><th>과목</th><th>고사실</th></tr>
           </thead>
           <tbody>
     `;
     personal.forEach(day => {
       const taken = day.periods.filter(p => p.takes);
       if (taken.length === 0) {
-        html += `<tr><td class="date-cell">${day.date}</td><td colspan="3" class="free">시험 없음 · 등교 후 출석체크</td></tr>`;
+        html += `<tr><td class="date-cell">${day.date}</td><td colspan="4" class="free">시험 없음 · 등교 후 출석체크</td></tr>`;
       } else {
         taken.forEach((p, idx) => {
           const rowClass = p.common ? 'row-common' : 'row-elect';
@@ -598,11 +783,13 @@ function renderStudents() {
           const isShort = p.minutes !== 50;
           const timeClass = isShort ? 'time-cell short' : 'time-cell';
           const enter = minus10min(p.start);
+          const room = getRoomFor(s, p);
           html += `<tr class="${rowClass}">`;
           if (idx === 0) html += `<td class="date-cell" rowspan="${taken.length}">${day.date}</td>`;
           html += `<td class="period-cell">${p.p}교시</td>`;
           html += `<td class="${timeClass}"><span class="enter">입실 ${enter}</span><span class="start">${p.start} ~ ${p.end}</span><span class="dur">${p.minutes}분</span></td>`;
           html += `<td class="subj">${p.subject}<span class="type">${typeLabel}</span></td>`;
+          html += `<td class="room-cell">${room}</td>`;
           html += `</tr>`;
         });
       }
