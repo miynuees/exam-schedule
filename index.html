@@ -380,7 +380,9 @@
   <!-- 2. 시험 시간표 -->
   <div class="tab-panel" data-panel="exam">
     <div class="card exam-card">
-      <h2 class="exam">시험 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(필요하면 직접 수정)</span></h2>
+      <h2 class="exam">시험 시간표 <span style="font-size:12px; color:var(--muted); font-weight:normal;">(필요하면 직접 수정 · 브라우저에 자동 저장됨)</span>
+        <button class="ghost" id="resetBtn" style="float:right; font-size:11px; padding:4px 10px; margin-top:-2px;">🔄 기본값으로 초기화</button>
+      </h2>
       <div id="examTableArea"></div>
       <div style="margin-top:8px; font-size:12px; color:var(--muted);">
         💡 입실 시간은 시작 시간보다 자동으로 10분 전으로 계산됩니다.<br>
@@ -456,7 +458,36 @@ let schedule = [
 
 let students = [];
 let commonRooms = {}; // 과목명 -> 고사실 (빈값이면 본인 반 교실)
-let electRooms = {};  // 과목명 -> { 집단: 고사실 }
+let electRooms = {    // 과목명 -> { 집단: 고사실 } (기본값: 2026년 1학기 중간고사)
+  "인공지능수학": { B: "2-1", C: "2-2" },
+  "지구과학":    { D: "2-1" },
+  "물질과에너지": { A: "405호", E: "410호" },
+  "윤리와사상":  { A: "2-1", B: "2-2", D: "2-3", E: "2-4" },
+  "생명과학":    { A: "2-6", B: "2-7", C: "405호", D: "410호" },
+  "법과사회":    { B: "405호", E: "401호" },
+  "역학과에너지": { C: "2-1", D: "2-2" }
+};
+
+/* ============== localStorage 영구 저장 ============== */
+const STORAGE_KEY = 'examScheduleState_v1';
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      schedule, commonRooms, electRooms
+    }));
+  } catch (e) { console.warn('저장 실패:', e); }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.schedule && Array.isArray(saved.schedule)) schedule = saved.schedule;
+    if (saved.commonRooms && typeof saved.commonRooms === 'object') commonRooms = saved.commonRooms;
+    if (saved.electRooms && typeof saved.electRooms === 'object') electRooms = saved.electRooms;
+  } catch (e) { console.warn('불러오기 실패:', e); }
+}
+loadState();
 
 /* ============== 유틸 ============== */
 function normalize(s) { return (s || '').toString().replace(/\s+/g, ''); }
@@ -531,6 +562,7 @@ function renderExamTable() {
         schedule[d].periods[p][f] = inp.value;
         schedule[d].periods[p].minutes = diffMinutes(schedule[d].periods[p].start, schedule[d].periods[p].end);
       }
+      saveState();
       renderExamTable();
       renderRoomCard();
       renderStudents();
@@ -540,6 +572,7 @@ function renderExamTable() {
     el.addEventListener('click', () => {
       const d = +el.dataset.d, p = +el.dataset.p;
       schedule[d].periods[p].common = !schedule[d].periods[p].common;
+      saveState();
       renderExamTable();
       renderRoomCard();
       renderStudents();
@@ -552,6 +585,7 @@ function renderExamTable() {
       // 남은 교시 번호 다시 매기기
       schedule[d].periods.forEach((x, i) => x.p = i + 1);
       if (schedule[d].periods.length === 0) schedule.splice(d, 1);
+      saveState();
       renderExamTable();
       renderRoomCard();
       renderStudents();
@@ -563,6 +597,7 @@ function renderExamTable() {
       const day = schedule[d];
       const newP = day.periods.length + 1;
       day.periods.push({ p: newP, start: "09:30", end: "10:20", minutes: 50, subject: "과목명", common: false });
+      saveState();
       renderExamTable();
       renderRoomCard();
       renderStudents();
@@ -573,6 +608,7 @@ function renderExamTable() {
       const d = +btn.dataset.d;
       if (!confirm(`"${schedule[d].date}" 날짜 전체를 삭제할까요?`)) return;
       schedule.splice(d, 1);
+      saveState();
       renderExamTable();
       renderRoomCard();
       renderStudents();
@@ -580,6 +616,7 @@ function renderExamTable() {
   });
   document.getElementById('addDayBtn').addEventListener('click', () => {
     schedule.push({ date: "새 날짜", periods: [{ p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "과목명", common: true }] });
+    saveState();
     renderExamTable();
     renderRoomCard();
     renderStudents();
@@ -676,6 +713,7 @@ function renderRoomCard() {
         if (!electRooms[sub]) electRooms[sub] = {};
         electRooms[sub][grp] = v;
       }
+      saveState();
       renderStudents();
     });
   });
@@ -884,6 +922,13 @@ document.getElementById('classFilter').addEventListener('change', renderStudents
 document.getElementById('searchInput').addEventListener('input', renderStudents);
 document.getElementById('printMode').addEventListener('change', renderStudents);
 document.getElementById('showRoom').addEventListener('change', renderStudents);
+
+/* 초기화 버튼 */
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('시험 시간표와 고사실 배정을 기본값으로 되돌릴까요?\n(브라우저에 저장된 설정이 사라집니다)')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+});
 
 /* 탭 전환 */
 document.querySelectorAll('.tab').forEach(btn => {
