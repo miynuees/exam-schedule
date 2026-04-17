@@ -259,7 +259,7 @@
     <h2 class="upload">1단계 · 선택과목 엑셀 업로드</h2>
     <div class="upload-row">
       <input type="file" id="fileInput" accept=".xlsx,.xls">
-      <span style="color: var(--muted); font-size: 13px;">"2학년 선택과목" 시트 자동 인식</span>
+      <span style="color: var(--muted); font-size: 13px;">첫 번째 시트 자동 사용 · 헤더 자동 감지 (반/번호/이름/과목들)</span>
     </div>
     <div id="fileStatus"></div>
   </div>
@@ -423,29 +423,46 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
   try {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array' });
-    // "2학년 선택과목" 시트 찾기 (정확한 이름 또는 비슷한 패턴)
-    let sheetName = wb.SheetNames.find(n => n === '2학년 선택과목');
-    if (!sheetName) sheetName = wb.SheetNames.find(n => /^2학년.*선택과목$/.test(n) && !/분반코드별|기재|배부/.test(n));
-    if (!sheetName) {
-      throw new Error(`"2학년 선택과목" 시트를 찾을 수 없습니다.\n현재 시트 목록: ${wb.SheetNames.join(', ')}`);
-    }
+    // 첫 번째 시트 자동 사용
+    const sheetName = wb.SheetNames[0];
+    if (!sheetName) throw new Error('엑셀에 시트가 없습니다.');
     const sheet = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 
-    // 2번째 행이 헤더 (첫 행은 약자)
-    const header = rows[1];
-    if (!header) throw new Error('헤더를 찾을 수 없습니다.');
-    // 5번째 컬럼(인덱스 5)부터 과목명
+    // 헤더 행 자동 감지 (앞 5행 안에서 "학년"/"이름" 키워드 찾기)
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const r = rows[i];
+      if (r && r.some(c => c === '학년' || c === '이름')) { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) throw new Error('헤더 행을 찾을 수 없습니다. ("학년" 또는 "이름" 컬럼 필요)');
+    const header = rows[headerIdx];
+
+    // 컬럼 위치 매핑
+    const col = { grade: -1, cls: -1, num: -1, name: -1 };
+    header.forEach((cell, idx) => {
+      const c = (cell || '').toString().trim();
+      if (c === '학년') col.grade = idx;
+      else if (c === '신반' || c === '반') col.cls = idx;
+      else if (c === '신번호' || c === '번호') col.num = idx;
+      else if (c === '이름' || c === '성명') col.name = idx;
+    });
+    if (col.cls === -1 || col.num === -1 || col.name === -1) {
+      throw new Error(`필수 컬럼을 찾을 수 없습니다. 필요: 반/번호/이름\n인식된 헤더: ${header.filter(Boolean).join(', ')}`);
+    }
+    // 과목 컬럼: 이름 컬럼 이후로 헤더에 값이 있는 모든 컬럼
     const subjectCols = {};
-    for (let i = 5; i < header.length; i++) {
-      if (header[i]) subjectCols[i] = header[i];
+    for (let i = col.name + 1; i < header.length; i++) {
+      if (header[i]) subjectCols[i] = String(header[i]).trim();
     }
 
     students = [];
-    for (let i = 2; i < rows.length; i++) {
+    for (let i = headerIdx + 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r || !r[0] || r[0] !== 2) continue;
-      const cls = r[1], num = r[2], oldId = r[3], name = r[4];
+      if (!r) continue;
+      // 학년 컬럼이 있으면 2학년만 필터, 없으면 전부
+      if (col.grade !== -1 && r[col.grade] !== 2 && r[col.grade] !== '2') continue;
+      const cls = r[col.cls], num = r[col.num], name = r[col.name];
       if (!cls || !num || !name) continue;
       const subjects = [];
       for (const [colIdx, subjName] of Object.entries(subjectCols)) {
