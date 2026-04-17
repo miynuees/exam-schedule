@@ -364,7 +364,11 @@ function renderExamTable() {
       }
       html += `<tr class="${cls}">`;
       if (pi === 0) {
-        html += `<td rowspan="${day.periods.length}" style="background:#f7f7f9;font-weight:600;"><input type="text" value="${day.date}" data-d="${di}" data-f="date" style="font-weight:600;"></td>`;
+        html += `<td rowspan="${day.periods.length}" style="background:#f7f7f9;font-weight:600;">
+          <input type="text" value="${day.date}" data-d="${di}" data-f="date" style="font-weight:600; margin-bottom:6px;">
+          <button class="ghost" data-action="add-period" data-d="${di}" style="font-size:11px; padding:3px 8px; width:100%;">+ 교시 추가</button>
+          <button class="ghost" data-action="del-day" data-d="${di}" style="font-size:11px; padding:3px 8px; width:100%; margin-top:4px; color:#c62828; border-color:#ffcdd2;">날짜 삭제</button>
+        </td>`;
       }
       html += `<td>${p.p}교시</td>`;
       html += `<td><input type="text" value="${p.start}" data-d="${di}" data-p="${pi}" data-f="start"></td>`;
@@ -379,8 +383,7 @@ function renderExamTable() {
   });
   html += '</tbody></table>';
   html += `<div style="display:flex; gap:8px; margin-top:8px;">
-    <button class="ghost" id="addDayBtn" style="font-size:12px;">+ 날짜 추가</button>
-    <button class="ghost" id="addPeriodBtn" style="font-size:12px;">+ 마지막 날에 교시 추가</button>
+    <button class="ghost" id="addDayBtn" style="font-size:12px;">+ 새 날짜 추가</button>
   </div>`;
   area.innerHTML = html;
 
@@ -410,21 +413,34 @@ function renderExamTable() {
     btn.addEventListener('click', () => {
       const d = +btn.dataset.d, p = +btn.dataset.p;
       schedule[d].periods.splice(p, 1);
+      // 남은 교시 번호 다시 매기기
+      schedule[d].periods.forEach((x, i) => x.p = i + 1);
       if (schedule[d].periods.length === 0) schedule.splice(d, 1);
+      renderExamTable();
+      renderStudents();
+    });
+  });
+  area.querySelectorAll('button[data-action="add-period"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = +btn.dataset.d;
+      const day = schedule[d];
+      const newP = day.periods.length + 1;
+      day.periods.push({ p: newP, start: "09:30", end: "10:20", minutes: 50, subject: "과목명", common: false });
+      renderExamTable();
+      renderStudents();
+    });
+  });
+  area.querySelectorAll('button[data-action="del-day"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = +btn.dataset.d;
+      if (!confirm(`"${schedule[d].date}" 날짜 전체를 삭제할까요?`)) return;
+      schedule.splice(d, 1);
       renderExamTable();
       renderStudents();
     });
   });
   document.getElementById('addDayBtn').addEventListener('click', () => {
     schedule.push({ date: "새 날짜", periods: [{ p: 1, start: "08:20", end: "09:10", minutes: 50, subject: "과목명", common: true }] });
-    renderExamTable();
-    renderStudents();
-  });
-  document.getElementById('addPeriodBtn').addEventListener('click', () => {
-    if (schedule.length === 0) return;
-    const last = schedule[schedule.length - 1];
-    const newP = last.periods.length + 1;
-    last.periods.push({ p: newP, start: "09:30", end: "10:20", minutes: 50, subject: "과목명", common: false });
     renderExamTable();
     renderStudents();
   });
