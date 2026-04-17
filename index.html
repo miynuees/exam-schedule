@@ -452,10 +452,11 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
         const val = r[colIdx];
         if (val) subjects.push([subjName, String(val).trim()]);
       }
+      const newId = `2${String(cls).padStart(2,'0')}${String(num).padStart(2,'0')}`;
       students.push({
         cls: +cls,
         num: +num,
-        oldId: oldId,
+        newId,
         name: String(name).trim(),
         subjects
       });
@@ -504,7 +505,7 @@ function renderStudents() {
     if (classVal !== 'all' && String(s.cls) !== classVal) return false;
     if (searchVal) {
       const q = searchVal.toLowerCase();
-      if (!s.name.toLowerCase().includes(q) && !String(s.oldId).includes(q) && !String(s.num).includes(q)) return false;
+      if (!s.name.toLowerCase().includes(q) && !String(s.newId).includes(q) && !String(s.num).includes(q)) return false;
     }
     return true;
   });
@@ -522,7 +523,7 @@ function renderStudents() {
         <div class="student-card-header">
           <div class="student-card-title">2학년 ${s.cls}반 ${s.num}번</div>
           <div class="student-card-name">${s.name}</div>
-          <div class="student-card-sub">학번 ${s.oldId} · 총 ${totalExams}과목 응시</div>
+          <div class="student-card-sub">학번 ${s.newId} · 총 ${totalExams}과목 응시</div>
         </div>
         <table class="schedule-table">
           <colgroup>
